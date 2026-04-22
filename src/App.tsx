@@ -916,21 +916,15 @@ const IndexCard: React.FC<{ title: string, ticker: string, matrix?: 'NDX'|'SPX',
   }
 
   let recColor = "text-[#34c759]";
-  let icon = null;
   
   if (recommendation === '暂停') {
       recColor = "text-[#ff3b30]";
-      icon = <span className="text-[12px] -mt-0.5">⏸</span>;
   } else if (recommendation === '观望') {
       recColor = "text-[#86868b]";
-      icon = <span className="text-[12px] -mt-0.5">☕</span>;
   } else if (recommendation === '顶格') {
       recColor = "text-[#bf5af2]";
-      icon = <span className="text-[12px] -mt-0.5">🚀</span>;
   } else if (recommendation.includes('倍')) {
       recColor = "text-[#32ade6]";
-      const parsedMulti = parseFloat(recommendation.split('倍')[0]);
-      icon = <span className="text-[12px] -mt-0.5">{parsedMulti < 1 ? '💧' : '🔥'}</span>;
   } else if (recommendation === '-') {
       recColor = "text-[#86868b]";
   }
@@ -946,7 +940,6 @@ const IndexCard: React.FC<{ title: string, ticker: string, matrix?: 'NDX'|'SPX',
       <div className="w-full text-left mb-3 px-1">
         <div className="flex items-center gap-1.5 break-words">
            <h3 className="text-[16px] font-bold text-white tracking-tight leading-tight">{title}</h3>
-           {icon && <div className="bg-[#1f1717] border border-white/5 px-1.5 py-[2px] rounded-md text-[10px] sm:text-[11px] font-medium whitespace-nowrap shadow-sm text-center flex items-center justify-center min-w-[36px] mt-0.5" style={{ color: recColor.replace('text-', '') }}>{icon}</div>}
         </div>
         <div className="text-[10px] font-medium text-[#86868b] tracking-wider mt-0.5">
           {format(new Date(), 'MM-dd HH:mm')}
