@@ -6,6 +6,50 @@ import path from 'path';
 // Instantiate yahooFinance for v3
 const yf = new yahooFinance();
 
+// --- Memory Cache for QDII Funds ---
+const qdiiCache = new Map();
+
+function getBjDate(date = new Date()) {
+    const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
+    return new Date(utc + (3600000 * 8));
+}
+
+function getBjDateStr(bjDate) {
+    return `${bjDate.getFullYear()}-${String(bjDate.getMonth() + 1).padStart(2, '0')}-${String(bjDate.getDate()).padStart(2, '0')}`;
+}
+
+function shouldFetchQdii(code) {
+    const cached = qdiiCache.get(code);
+    if (!cached) return true;
+
+    const bjNow = getBjDate();
+    const dateStrNow = getBjDateStr(bjNow);
+    const timeNumNow = bjNow.getHours() * 100 + bjNow.getMinutes();
+
+    // If cache is from a previous day, and it's past 09:30 AM today, trigger fetch
+    if (cached.dateStr !== dateStrNow && timeNumNow >= 930) {
+        return true;
+    }
+
+    const cacheAgeMins = (Date.now() - cached.timestamp) / 60000;
+    const isTradingHours = (timeNumNow >= 930 && timeNumNow <= 1130) || (timeNumNow >= 1300 && timeNumNow <= 1500);
+
+    // 1. Every 10 mins during active trading hours
+    if (isTradingHours && cacheAgeMins >= 10) return true;
+
+    // 2. Afternoon close final fetch logic
+    // If we are past 15:00 today, AND the cache belongs to today BUT was recorded before 15:00, we should fetch one last time to get the final settlement.
+    if (timeNumNow >= 1500 && cached.dateStr === dateStrNow) {
+        const cacheBj = getBjDate(new Date(cached.timestamp));
+        const cacheTimeNum = cacheBj.getHours() * 100 + cacheBj.getMinutes();
+        if (cacheTimeNum < 1500) {
+            return true;
+        }
+    }
+
+    return false; // Skip fetch during non-trading hours / outside interval
+}
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -42,6 +86,15 @@ async function startServer() {
           const match = symbol.match(/^(\d{6})/);
           if (!match) return null;
           const code = match[1];
+
+          // ----- Caching Layer -----
+          if (!shouldFetchQdii(code)) {
+            // console.log(`[Cache Hit] Using cached data for ${code}`);
+            return qdiiCache.get(code).data;
+          }
+          // console.log(`[Cache Miss] Fetching fresh data for ${code}`);
+          // -------------------------
+
           let isSZ = '0'; // Default to SZ
           if (symbol.endsWith('.SS') || code.startsWith('5')) {
              isSZ = '1';
@@ -112,6 +165,15 @@ async function startServer() {
             }
           }
           
+          // Only cache valid results that have actual data
+          if (result.price != null || result.nav != null) {
+              qdiiCache.set(code, {
+                  data: result,
+                  timestamp: Date.now(),
+                  dateStr: getBjDateStr(getBjDate())
+              });
+          }
+
           return result;
         } catch (e) {
           console.error('EastMoney fetch error for', symbol, e.message);

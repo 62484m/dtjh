@@ -1,5 +1,5 @@
 {
-  "name": "Hadwin定投计划",
+  "name": "做时间的朋友",
   "description": "基于纳指100和标普500的定投策略应用，结合PE和VIX指标给出定投倍数建议。",
   "requestFramePermissions": [],
   "majorCapabilities": []

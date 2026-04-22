@@ -465,7 +465,7 @@ export default function App() {
               <span>我关注的基金/指数</span>
               <button 
                 onClick={() => {
-                  const newFund: FundConfig = { id: Date.now().toString(), name: '', symbol: '' };
+                  const newFund: FundConfig = { id: Date.now().toString(), name: '', symbol: '', matrix: 'NDX' };
                   saveFunds([...fundsConfig, newFund]);
                 }}
                 className="text-[#0a84ff] flex items-center gap-0.5 text-[13px] font-medium hover:opacity-80"
@@ -625,16 +625,26 @@ export default function App() {
                 ? fund.name 
                 : (marketData?.data?.[fund.symbol]?.etf?.name || fund.symbol || '未命名');
               
+              // Fallback logic for old saved items missing a matrix
+              let effMatrix = fund.matrix;
+              if (!effMatrix && displayTitle) {
+                 if (displayTitle.includes('标普') || displayTitle.includes('SPX')) {
+                    effMatrix = 'SPX';
+                 } else {
+                    effMatrix = 'NDX'; // Default fallback
+                 }
+              }
+
               return (
                 <IndexCard
                   key={fund.id}
                   title={displayTitle}
                   ticker={fund.symbol}
-                  matrix={fund.matrix}
+                  matrix={effMatrix}
                   data={marketData ? marketData.data[fund.symbol] : null}
                   vix={marketData?.vix?.price}
                   globalPe={marketData?.globalPe}
-                  onClick={() => { setSelectedView(fund.id); setThermometerMatrix(fund.matrix || 'NDX'); }}
+                  onClick={() => { setSelectedView(fund.id); setThermometerMatrix(effMatrix || 'NDX'); }}
                 />
               );
             })}
