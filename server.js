@@ -102,9 +102,14 @@ async function startServer() {
           
           let result = { nav: null, name: null, price: null, change: null };
 
+          const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'http://fund.eastmoney.com/'
+          };
+
           // 1. Fetch Official Name and NAV
           const navUrl = `http://fundgz.1234567.com.cn/js/${code}.js?rt=${new Date().getTime()}`;
-          const navRes = await fetch(navUrl).catch(() => null);
+          const navRes = await fetch(navUrl, { headers }).catch(() => null);
           if (navRes) {
             const text = await navRes.text();
             const jsonStr = text.match(/jsonpgz\((.*)\);/);
@@ -118,7 +123,7 @@ async function startServer() {
           // 2. Fetch Spot Price & IOPV (Real-time NAV from Tencent)
           const marketPrefix = code.startsWith('5') ? 'sh' : 'sz';
           const tencentUrl = `http://qt.gtimg.cn/q=${marketPrefix}${code}`;
-          const tencentRes = await fetch(tencentUrl).catch(() => null);
+          const tencentRes = await fetch(tencentUrl, { headers }).catch(() => null);
           if (tencentRes) {
              const tencentText = await tencentRes.text();
              if (tencentText && tencentText.includes('~')) {
@@ -150,7 +155,7 @@ async function startServer() {
           // 3. Fallback to Eastmoney if Tencent failed
           if (result.price == null) {
             const stockUrl = `http://push2.eastmoney.com/api/qt/stock/get?secid=${isSZ}.${code}&fields=f2,f43,f170`;
-            const stockRes = await fetch(stockUrl).catch(() => null);
+            const stockRes = await fetch(stockUrl, { headers }).catch(() => null);
             if (stockRes) {
               const stockJson = await stockRes.json();
               if (stockJson && stockJson.data) {
@@ -282,19 +287,45 @@ async function startServer() {
       if (symbol.endsWith('.SS') || code.startsWith('5')) isSZ = '1';
 
       // 1. Fetch ~750 trading days (3 yrs) price
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'http://fund.eastmoney.com/'
+      };
+      
       const klineUrl = `http://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${isSZ}.${code}&fields1=f1&fields2=f51,f53&klt=101&fqt=1&end=20500101&lmt=750`;
-      const klineRes = await fetch(klineUrl).catch(() => null);
-      if (!klineRes) return [];
+      const klineRes = await fetch(klineUrl, { headers }).catch(e => {
+          console.error("kline fetch failed:", e);
+          return null;
+      });
+      if (!klineRes) {
+          console.error("klineRes is null for", code);
+          return [];
+      }
+      if (!klineRes.ok) {
+          console.error("klineRes not ok:", klineRes.status, klineRes.statusText);
+      }
       const klineData = await klineRes.json();
       
       // 2. Fetch full NAV history from pingzhongdata JS
       const navJsUrl = `http://fund.eastmoney.com/pingzhongdata/${code}.js`;
-      const navJsRes = await fetch(navJsUrl).catch(() => null);
-      if (!navJsRes) return [];
+      const navJsRes = await fetch(navJsUrl, { headers }).catch(e => {
+          console.error("navJs fetch failed:", e);
+          return null;
+      });
+      if (!navJsRes) {
+          console.error("navJsRes is null for", code);
+          return [];
+      }
+      if (!navJsRes.ok) {
+          console.error("navJsRes not ok:", navJsRes.status, navJsRes.statusText);
+      }
       const navJsText = await navJsRes.text();
       
       const navMatch = navJsText.match(/Data_netWorthTrend\s*=\s*(\[.*?\])\s*;/);
-      if (!navMatch) return [];
+      if (!navMatch) {
+          console.error("Could not find Data_netWorthTrend in response for", code, navJsText.substring(0, 100));
+          return [];
+      }
       const navList = JSON.parse(navMatch[1]);
 
       if (!klineData.data || !navList.length) {
