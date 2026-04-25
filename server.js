@@ -186,6 +186,24 @@ async function startServer() {
         return null;
       };
 
+      const fetchYahooRaw = async (sym) => {
+        try {
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1d`;
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const data = await res.json();
+          const meta = data.chart?.result?.[0]?.meta;
+          if (meta) {
+              return {
+                  regularMarketPrice: meta.regularMarketPrice,
+                  regularMarketChangePercent: (meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100
+              };
+          }
+        } catch (e) {
+          console.error('Raw Yahoo fetch failed for:', sym, e.message);
+        }
+        return null;
+      };
+
       await Promise.all(fundsList.map(async (fund) => {
         if (!fund.symbol) return;
         try {
@@ -193,14 +211,18 @@ async function startServer() {
           const isChineseFund = /^\d{6}(?:\.SZ|\.SS)?$/i.test(etfTarget) || /^\d{6}/.test(etfTarget);
           
           let anchorSymbol = fund.symbol;
+          if (anchorSymbol === 'NDX') anchorSymbol = '^NDX';
+          if (anchorSymbol === 'SPX') anchorSymbol = '^SPX';
           if (fund.matrix === 'NDX' && isChineseFund) anchorSymbol = 'QQQ';
           if (fund.matrix === 'SPX' && isChineseFund) anchorSymbol = 'SPY';
           
-          let etfFetchSymbol = fund.etfSymbol || anchorSymbol; 
+          let etfFetchSymbol = fund.etfSymbol || anchorSymbol;
+          if (etfFetchSymbol === 'NDX') etfFetchSymbol = '^NDX';
+          if (etfFetchSymbol === 'SPX') etfFetchSymbol = '^SPX';
 
           const [quote, etfQuote, etfSummary, emFundData] = await Promise.all([
-            yf.quote(anchorSymbol).catch(() => null),
-            yf.quote(etfFetchSymbol).catch(() => null),
+            yf.quote(anchorSymbol).catch(() => fetchYahooRaw(anchorSymbol)),
+            yf.quote(etfFetchSymbol).catch(() => fetchYahooRaw(etfFetchSymbol)),
             !isChineseFund ? yf.quoteSummary(etfFetchSymbol, { modules: ['summaryDetail', 'price'] }).catch(() => null) : null,
             isChineseFund ? fetchEastMoneyInfo(etfTarget) : null
           ]);
